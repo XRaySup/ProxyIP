@@ -1,2 +1,3 @@
 # Ignore the temp folder and its contents
 temp/
+results.csv
