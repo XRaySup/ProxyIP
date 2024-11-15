@@ -7,6 +7,7 @@ set "TEMP_DIR=temp"
 set "ZIP_FILE=%TEMP_DIR%\downloaded.zip"
 set "EXTRACT_DIR=%TEMP_DIR%\extracted"
 set "OUTPUT_CSV=results.csv"
+set "VALIDIPS_CSV=ValidIPs.csv"
 set "XRAY_EXECUTABLE=%BIN_DIR%\xray.exe"
 set "XRAY_CONFIG_FILE=%BIN_DIR%\config.json"
 set "TEMP_CONFIG_FILE=%TEMP_DIR%\temp_config.json"
@@ -92,7 +93,7 @@ if exist temp_downloaded_file del temp_downloaded_file
     :: Extract ZIP file to the extraction directory
     echo Extracting ZIP file...
     powershell -command "Expand-Archive -Path '%ZIP_FILE%' -DestinationPath '%EXTRACT_DIR%' -Force"
-
+    if exist VALIDIPS_CSV del VALIDIPS_CSV
     :: Create or clear the output CSV file
     echo IP,HTTP Check,Xray Check,Download Time "ms" ,Download Size "Bytes" > "%OUTPUT_CSV%"
 
@@ -139,6 +140,7 @@ for /f %%s in ('powershell -command "(Get-Item %TEMP_DIR%\temp_downloaded_file).
 
 if "!actualFileSize!"=="%fileSize%" (
     echo Downloaded file size matches the requested size.
+    echo !IPADDR! >> "%VALIDIPS_CSV%"
 ) else (
     echo Warning: Downloaded file size does not match the requested size.
 )
