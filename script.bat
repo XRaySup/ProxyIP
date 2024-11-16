@@ -12,7 +12,7 @@ set "XRAY_EXECUTABLE=%BIN_DIR%\xray.exe"
 set "XRAY_CONFIG_FILE=%BIN_DIR%\config.json"
 set "TEMP_CONFIG_FILE=%TEMP_DIR%\temp_config.json"
 set "CURL_OUTPUT=%TEMP_DIR%\_check.txt"
-set "fileSize=1048576"
+set "fileSize=102400"
 
 :: Ensure the temp and extracted directories exist
 if not exist "%TEMP_DIR%" mkdir "%TEMP_DIR%"
@@ -93,7 +93,7 @@ if exist temp_downloaded_file del temp_downloaded_file
     :: Extract ZIP file to the extraction directory
     echo Extracting ZIP file...
     powershell -command "Expand-Archive -Path '%ZIP_FILE%' -DestinationPath '%EXTRACT_DIR%' -Force"
-    if exist VALIDIPS_CSV del VALIDIPS_CSV
+    if exist %VALIDIPS_CSV% del %VALIDIPS_CSV%
     :: Create or clear the output CSV file
     echo IP,HTTP Check,Xray Check,Download Time "ms" ,Download Size "Bytes" > "%OUTPUT_CSV%"
 
@@ -121,11 +121,15 @@ if exist temp_downloaded_file del temp_downloaded_file
                 powershell -command "(Get-Content -Path '%XRAY_CONFIG_FILE%') -replace 'PROXYIP', '!BASE64IP!' | Set-Content -Path '%TEMP_CONFIG_FILE%'"
 
                 start "" /b "%XRAY_EXECUTABLE%" run -config "%TEMP_CONFIG_FILE%"
-                timeout /t 5 /nobreak > nul
+                timeout /t 1 /nobreak > nul
 
                 for /f %%m in ('curl -s -o nul -w "%%{http_code}" --proxy http://127.0.0.1:8080 https://cp.cloudflare.com/generate_204') do (
                     set "XRAY_CHECK=%%m"
                 )
+                if "!XRAY_CHECK!"=="204" (
+    echo 204 Check Response is: !XRAY_CHECK!
+
+
 
 :: Download Test
 powershell -command "& {curl.exe -s -w \"TIME: %%{time_total}\" --proxy http://127.0.0.1:8080 https://speed.cloudflare.com/__down?bytes=%fileSize% --output %TEMP_DIR%\temp_downloaded_file}" > %TEMP_DIR%\temp_output.txt
@@ -158,11 +162,15 @@ echo IP: !IPADDR!, HTTP Check: !HTTP_CHECK!, 204 Check: !XRAY_CHECK!, Download T
 :: Clean up temporary file
 if exist temp_downloaded_file del temp_downloaded_file
 
+) else (
+   echo IP: !IPADDR!, HTTP Check: !HTTP_CHECK!, 204 Check: !XRAY_CHECK!
 
+                echo !IPADDR!,!HTTP_CHECK!,!XRAY_CHECK!,-,- >> "%OUTPUT_CSV%
+)
 
                 taskkill /f /im xray.exe > nul 2>&1
             ) else (
-                echo !IPADDR!,!HTTP_CHECK!,Skipped >> "%OUTPUT_CSV%"
+                echo !IPADDR!,!HTTP_CHECK!,-,-,- >> "%OUTPUT_CSV%"
             )
         )
     )
