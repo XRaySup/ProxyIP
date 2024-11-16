@@ -18,8 +18,6 @@ set "fileSize=102400"
 if not exist "%TEMP_DIR%" mkdir "%TEMP_DIR%"
 if not exist "%EXTRACT_DIR%" mkdir "%EXTRACT_DIR%"
 
-
-
 :: Check if an IP address is provided as an argument
 if "%~1" neq "" (
     set "IPADDR=%~1"
@@ -51,36 +49,35 @@ if "%~1" neq "" (
             set "XRAY_CHECK=%%m"
         )
 
-:: Download Test
-powershell -command "& {curl.exe -s -w \"TIME: %%{time_total}\" --proxy http://127.0.0.1:8080 https://speed.cloudflare.com/__down?bytes=%fileSize% --output temp_downloaded_file}" > %TEMP_DIR%\temp_output.txt
+        :: Download Test
+        powershell -command "& {curl.exe -s -w \"TIME: %%{time_total}\" --proxy http://127.0.0.1:8080 https://speed.cloudflare.com/__down?bytes=%fileSize% --output temp_downloaded_file}" > %TEMP_DIR%\temp_output.txt
 
-:: Extract the download time from the output file
-set "downTimeMil=0"
-for /f "tokens=2 delims=:" %%k in ('findstr "TIME" %TEMP_DIR%\temp_output.txt') do set "downTimeMil=%%k"
-if "!downTimeMil!"=="" set "downTimeMil=0"
+        :: Extract the download time from the output file
+        set "downTimeMil=0"
+        for /f "tokens=2 delims=:" %%k in ('findstr "TIME" %TEMP_DIR%\temp_output.txt') do set "downTimeMil=%%k"
+        if "!downTimeMil!"=="" set "downTimeMil=0"
 
-:: Check if the downloaded file size matches the requested size
-for /f %%s in ('powershell -command "(Get-Item temp_downloaded_file).length"') do set "actualFileSize=%%s"
+        :: Check if the downloaded file size matches the requested size
+        for /f %%s in ('powershell -command "(Get-Item temp_downloaded_file).length"') do set "actualFileSize=%%s"
 
-if "!actualFileSize!"=="%fileSize%" (
-    echo Downloaded file size matches the requested size.
-) else (
-    echo Warning: Downloaded file size does not match the requested size.
-)
+        if "!actualFileSize!"=="%fileSize%" (
+            echo Downloaded file size matches the requested size.
+        ) else (
+            echo Warning: Downloaded file size does not match the requested size.
+        )
 
-:: Convert the floating-point download time to an integer (milliseconds)
-for /f %%m in ('powershell -command "[math]::Round(!downTimeMil! * 1000)"') do (
-    set "downTimeMilInt=%%m"
-)
-echo "Converted Download Time (ms):" !downTimeMilInt!
+        :: Convert the floating-point download time to an integer (milliseconds)
+        for /f %%m in ('powershell -command "[math]::Round(!downTimeMil! * 1000)"') do (
+            set "downTimeMilInt=%%m"
+        )
+        echo "Converted Download Time (ms):" !downTimeMilInt!
 
-:: Record result in CSV
-echo IP: !IPADDR!, HTTP Check: !HTTP_CHECK!, 204 Check: !XRAY_CHECK!, Download Time: !downTimeMilInt!, File Size Match: !actualFileSize!
-echo IP: !IPADDR!, HTTP Check: !HTTP_CHECK!, 204 Check: !XRAY_CHECK!, Download Time: !downTimeMilInt!, File Size Match: !actualFileSize! >> "%OUTPUT_CSV%"
+        :: Record result in CSV
+        echo IP: !IPADDR!, HTTP Check: !HTTP_CHECK!, 204 Check: !XRAY_CHECK!, Download Time: !downTimeMilInt!, File Size Match: !actualFileSize!
+        echo IP: !IPADDR!, HTTP Check: !HTTP_CHECK!, 204 Check: !XRAY_CHECK!, Download Time: !downTimeMilInt!, File Size Match: !actualFileSize! >> "%OUTPUT_CSV%"
 
-:: Clean up temporary file
-if exist temp_downloaded_file del temp_downloaded_file
-
+        :: Clean up temporary file
+        if exist temp_downloaded_file del temp_downloaded_file
 
         :: Stop Xray process
         taskkill /f /im xray.exe > nul 2>&1
@@ -93,9 +90,11 @@ if exist temp_downloaded_file del temp_downloaded_file
     :: Extract ZIP file to the extraction directory
     echo Extracting ZIP file...
     powershell -command "Expand-Archive -Path '%ZIP_FILE%' -DestinationPath '%EXTRACT_DIR%' -Force"
+    
     if exist %VALIDIPS_CSV% del %VALIDIPS_CSV%
+
     :: Create or clear the output CSV file
-    echo IP,HTTP Check,Xray Check,Download Time "ms" ,Download Size "Bytes" > "%OUTPUT_CSV%"
+    echo IP,HTTP Check,Xray Check,Download Time "ms",Download Size "Bytes" > "%OUTPUT_CSV%"
 
     :: Loop through each file with "-443.txt" in the extraction directory
     for %%f in ("%EXTRACT_DIR%\*-443.txt") do (
@@ -126,55 +125,53 @@ if exist temp_downloaded_file del temp_downloaded_file
                 for /f %%m in ('curl -s -o nul -w "%%{http_code}" --proxy http://127.0.0.1:8080 https://cp.cloudflare.com/generate_204') do (
                     set "XRAY_CHECK=%%m"
                 )
+
                 if "!XRAY_CHECK!"=="204" (
-    echo 204 Check Response is: !XRAY_CHECK!
+                    echo 204 Check Response is: !XRAY_CHECK!
+                    :: Download Test
+                    powershell -command "& {curl.exe -s -w \"TIME: %%{time_total}\" --proxy http://127.0.0.1:8080 https://speed.cloudflare.com/__down?bytes=%fileSize% --output %TEMP_DIR%\temp_downloaded_file}" > %TEMP_DIR%\temp_output.txt
 
+                    :: Extract the download time from the output file
+                    set "downTimeMil=0"
+                    for /f "tokens=2 delims=:" %%k in ('findstr "TIME" %TEMP_DIR%\temp_output.txt') do set "downTimeMil=%%k"
+                    if "!downTimeMil!"=="" set "downTimeMil=0"
 
+                    :: Check if the downloaded file size matches the requested size
+                    for /f %%s in ('powershell -command "(Get-Item %TEMP_DIR%\temp_downloaded_file).length"') do set "actualFileSize=%%s"
 
-:: Download Test
-powershell -command "& {curl.exe -s -w \"TIME: %%{time_total}\" --proxy http://127.0.0.1:8080 https://speed.cloudflare.com/__down?bytes=%fileSize% --output %TEMP_DIR%\temp_downloaded_file}" > %TEMP_DIR%\temp_output.txt
+                    if "!actualFileSize!"=="%fileSize%" (
+                        echo Downloaded file size matches the requested size.
+                        echo !IPADDR! >> "%VALIDIPS_CSV%"
+                    ) else (
+                        echo Warning: Downloaded file size does not match the requested size.
+                    )
 
-:: Extract the download time from the output file
-set "downTimeMil=0"
-for /f "tokens=2 delims=:" %%k in ('findstr "TIME" %TEMP_DIR%\temp_output.txt') do set "downTimeMil=%%k"
-if "!downTimeMil!"=="" set "downTimeMil=0"
+                    :: Convert the floating-point download time to an integer (milliseconds)
+                    for /f %%m in ('powershell -command "[math]::Round(!downTimeMil! * 1000)"') do (
+                        set "downTimeMilInt=%%m"
+                    )
+                    echo "Converted Download Time (ms):" !downTimeMilInt!
 
-:: Check if the downloaded file size matches the requested size
-for /f %%s in ('powershell -command "(Get-Item %TEMP_DIR%\temp_downloaded_file).length"') do set "actualFileSize=%%s"
+                    :: Record result in CSV
+                    echo IP: !IPADDR!, HTTP Check: !HTTP_CHECK!, 204 Check: !XRAY_CHECK!, Download Time: !downTimeMilInt!, File Size Match: !actualFileSize!
 
-if "!actualFileSize!"=="%fileSize%" (
-    echo Downloaded file size matches the requested size.
-    echo !IPADDR! >> "%VALIDIPS_CSV%"
-) else (
-    echo Warning: Downloaded file size does not match the requested size.
-)
+                                    echo !IPADDR!,!HTTP_CHECK!,!XRAY_CHECK!,!downTimeMilInt!,!actualFileSize! >> "%OUTPUT_CSV%"
+                    :: Clean up temporary file
+                    if exist temp_downloaded_file del temp_downloaded_file
 
-:: Convert the floating-point download time to an integer (milliseconds)
-for /f %%m in ('powershell -command "[math]::Round(!downTimeMil! * 1000)"') do (
-    set "downTimeMilInt=%%m"
-)
-echo "Converted Download Time (ms):" !downTimeMilInt!
+                    ) else (
+                    echo IP: !IPADDR!, HTTP Check: !HTTP_CHECK!, 204 Check: !XRAY_CHECK!
 
-:: Record result in CSV
-echo IP: !IPADDR!, HTTP Check: !HTTP_CHECK!, 204 Check: !XRAY_CHECK!, Download Time: !downTimeMilInt!, File Size Match: !actualFileSize!
+                    echo !IPADDR!,!HTTP_CHECK!,!XRAY_CHECK!,-,- >> "%OUTPUT_CSV%
 
-                echo !IPADDR!,!HTTP_CHECK!,!XRAY_CHECK!,!downTimeMilInt!,!actualFileSize! >> "%OUTPUT_CSV%"
-:: Clean up temporary file
-if exist temp_downloaded_file del temp_downloaded_file
-
-) else (
-   echo IP: !IPADDR!, HTTP Check: !HTTP_CHECK!, 204 Check: !XRAY_CHECK!
-
-                echo !IPADDR!,!HTTP_CHECK!,!XRAY_CHECK!,-,- >> "%OUTPUT_CSV%
-)
-
+                )
+                
                 taskkill /f /im xray.exe > nul 2>&1
             ) else (
                 echo !IPADDR!,!HTTP_CHECK!,-,-,- >> "%OUTPUT_CSV%"
             )
         )
     )
-
     echo Done. Results saved in %OUTPUT_CSV%.
 )
 
