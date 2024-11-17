@@ -5,13 +5,13 @@ install_dependencies() {
     echo "Checking dependencies..."
 
     # Install curl if not found
-    if ! command -v curl &> /dev/null; then
+    if ! command -v curl &>/dev/null; then
         echo "Installing curl..."
         sudo apt-get update && sudo apt-get install -y curl
     fi
 
     # Install unzip if not found
-    if ! command -v unzip &> /dev/null; then
+    if ! command -v unzip &>/dev/null; then
         echo "Installing unzip..."
         sudo apt-get install -y unzip
     fi
@@ -19,7 +19,7 @@ install_dependencies() {
     # Install Xray if not found
     if ! [ -f "./bin/xray" ]; then
         echo "Downloading Xray..."
-        XRAY_VERSION="v1.8.1"  # Specify the desired version
+        XRAY_VERSION="v1.8.1" # Specify the desired version
         XRAY_DIR="./bin"
         mkdir -p "$XRAY_DIR"
 
@@ -36,8 +36,8 @@ install_dependencies() {
 # Install dependencies
 install_dependencies
 
-set -euo pipefail
-IFS=$'\n\t'
+# set -euo pipefail
+# IFS=$'\n\t'
 
 # Define paths
 BIN_DIR="bin"
@@ -54,11 +54,6 @@ fileSize=102400
 # Ensure the temp and extracted directories exist
 mkdir -p "$TEMP_DIR" "$EXTRACT_DIR"
 
-# Function to perform Base64 encoding
-base64_encode() {
-    echo -n "$1" | base64
-}
-
 # Check if an IP address is provided as an argument
 if [ "$#" -gt 0 ]; then
     IPADDR="$1"
@@ -71,22 +66,32 @@ if [ "$#" -gt 0 ]; then
     if [ "$HTTP_CHECK" == "400" ]; then
         echo "IP $IPADDR passed HTTP check. Starting Xray check..."
 
-        # Encode IP in Base64 format
-        BASE64IP=$(base64_encode "$IPADDR")
+        # Base64-encode the IP address
+        BASE64IP=$(echo -n "$IPADDR" | base64)
 
-        # Update the Xray config with the Base64 IP
-        sed "s/PROXYIP/$BASE64IP/g" "$XRAY_CONFIG_FILE" > "$TEMP_CONFIG_FILE"
+        # Update Xray config with the Base64 IP
+        sed "s/PROXYIP/$BASE64IP/g" "$XRAY_CONFIG_FILE" >"$TEMP_CONFIG_FILE"
 
-        # Run Xray in the background and perform 204 check
-        nohup "$XRAY_EXECUTABLE" run -config "$TEMP_CONFIG_FILE" &
+        # Start Xray as a background process with the updated config
+        echo "Starting Xray for IP: $IPADDR"
+        "$XRAY_EXECUTABLE" -config "$TEMP_CONFIG_FILE" &
         XRAY_PID=$!
-        sleep 5
 
-        # Perform the 204 No Content check via Xray proxy
-        XRAY_CHECK=$(curl -s -o /dev/null -w "%{http_code}" --proxy "http://127.0.0.1:8080" "https://cp.cloudflare.com/generate_204")
+        # Wait for Xray to initialize
+        sleep 1
+
+        # Check if Xray started successfully
+        if ! ps -p $XRAY_PID >/dev/null; then
+            echo "Failed to start Xray for IP: $IPADDR"
+            echo "$IPADDR,$HTTP_CHECK,Failed to Start Xray" >>"$RESULTS_CSV"
+            continue
+        fi
+
+        # Test 204 response with Xray
+        XRAY_CHECK=$(curl -s -m 3 -o /dev/null -w "%{http_code}" --proxy http://127.0.0.1:8080 https://cp.cloudflare.com/generate_204)
 
         # Download Test
-        curl -s -w "TIME: %{time_total}" --proxy "http://127.0.0.1:8080" "https://speed.cloudflare.com/__down?bytes=$fileSize" --output "$TEMP_DIR/temp_downloaded_file" > "$TEMP_DIR/temp_output.txt"
+        curl -s -m 3 -w "TIME: %{time_total}" --proxy "http://127.0.0.1:8080" "https://speed.cloudflare.com/__down?bytes=$fileSize" --output "$TEMP_DIR/temp_downloaded_file" >"$TEMP_DIR/temp_output.txt"
 
         # Extract the download time from the output file
         downTimeMil=$(grep "TIME" "$TEMP_DIR/temp_output.txt" | awk -F': ' '{print $2}')
@@ -108,7 +113,7 @@ if [ "$#" -gt 0 ]; then
 
         # Record result in CSV
         echo "IP: $IPADDR, HTTP Check: $HTTP_CHECK, 204 Check: $XRAY_CHECK, Download Time: $downTimeMilInt, File Size Match: $actualFileSize"
-        echo "$IPADDR,$HTTP_CHECK,$XRAY_CHECK,$downTimeMilInt,$actualFileSize" >> "$OUTPUT_CSV"
+        echo "$IPADDR,$HTTP_CHECK,$XRAY_CHECK,$downTimeMilInt,$actualFileSize" >>"$OUTPUT_CSV"
 
         # Clean up temporary file
         rm -f "$TEMP_DIR/temp_downloaded_file"
@@ -126,12 +131,12 @@ else
     unzip -o "$ZIP_FILE" -d "$EXTRACT_DIR"
 
     # Create or clear the output CSV file
-    echo "IP,HTTP Check,Xray Check,Download Time (ms),Download Size (Bytes)" > "$OUTPUT_CSV"
+    echo "IP,HTTP Check,Xray Check,Download Time (ms),Download Size (Bytes)" >"$OUTPUT_CSV"
 
     # Loop through each file with "-443.txt" in the extraction directory
     for file in "$EXTRACT_DIR"/*-443.txt; do
         echo "Processing file: $file"
-        
+
         while IFS= read -r IPADDR; do
             echo "Checking IP: $IPADDR"
 
@@ -140,37 +145,69 @@ else
 
             if [ "$HTTP_CHECK" == "400" ]; then
                 echo "IP $IPADDR passed HTTP check. Starting Xray check..."
-                BASE64IP=$(base64_encode "$IPADDR")
-                sed "s/PROXYIP/$BASE64IP/g" "$XRAY_CONFIG_FILE" > "$TEMP_CONFIG_FILE"
+                # Base64-encode the IP address
+                BASE64IP=$(echo -n "$IPADDR" | base64)
 
-                nohup "$XRAY_EXECUTABLE" run -config "$TEMP_CONFIG_FILE" &
+                # Update Xray config with the Base64 IP
+                sed "s/PROXYIP/$BASE64IP/g" "$XRAY_CONFIG_FILE" >"$TEMP_CONFIG_FILE"
+
+                # Start Xray as a background process with the updated config
+                echo "Starting Xray for IP: $IPADDR"
+                "$XRAY_EXECUTABLE" -config "$TEMP_CONFIG_FILE" &
                 XRAY_PID=$!
                 sleep 1
+                # Check if Xray started successfully
+                if ! ps -p $XRAY_PID >/dev/null; then
+                    echo "Failed to start Xray for IP: $IPADDR"
+                    echo "$IPADDR,$HTTP_CHECK,Failed to Start Xray" >>"$RESULTS_CSV"
+                    continue
+                fi
+                XRAY_CHECK=$(curl -s -m 3 -o /dev/null -w "%{http_code}" --proxy http://127.0.0.1:8080 https://cp.cloudflare.com/generate_204)
 
-                XRAY_CHECK=$(curl -s -o /dev/null -w "%{http_code}" --proxy "http://127.0.0.1:8080" "https://cp.cloudflare.com/generate_204")
-
+                # Check if XRAY_CHECK has a value (optional)
+                if [ -n "$XRAY_CHECK" ]; then
+                    echo "HTTP Status Code: $XRAY_CHECK"
+                fi
                 if [ "$XRAY_CHECK" == "204" ]; then
                     echo "204 Check Response is: $XRAY_CHECK"
 
-                    curl -s -w "TIME: %{time_total}" --proxy "http://127.0.0.1:8080" "https://speed.cloudflare.com/__down?bytes=$fileSize" --output "$TEMP_DIR/temp_downloaded_file" > "$TEMP_DIR/temp_output.txt"
+                    # Download the file and capture the time taken using curl
+                    curl -s -m 3 -w "TIME: %{time_total}\n" --proxy "http://127.0.0.1:8080" \
+                        "https://speed.cloudflare.com/__down?bytes=$fileSize" \
+                        --output "$TEMP_DIR/temp_downloaded_file" >"$TEMP_DIR/temp_output.txt"
 
+                    # Extract the download time from the output file
                     downTimeMil=$(grep "TIME" "$TEMP_DIR/temp_output.txt" | awk -F': ' '{print $2}')
                     downTimeMil=${downTimeMil:-0}
 
-                    actualFileSize=$(stat -c%s "$TEMP_DIR/temp_downloaded_file" 2>/dev/null || echo 0)
+                    # Get the actual size of the downloaded file
+                    if [ -f "$TEMP_DIR/temp_downloaded_file" ]; then
+                        actualFileSize=$(stat -c%s "$TEMP_DIR/temp_downloaded_file" 2>/dev/null || echo 0)
+                    else
+                        actualFileSize=0
+                    fi
 
+                    # Check if the actual size matches the expected size
                     if [ "$actualFileSize" -eq "$fileSize" ]; then
-                        echo "$IPADDR" >> "$VALIDIPS_CSV"
+                        echo "$IPADDR" >>"$VALIDIPS_CSV"
+                        echo "Download successful: $actualFileSize bytes"
+                    else
+                        echo "Download failed or incorrect size: $actualFileSize bytes (expected $fileSize bytes)"
                     fi
 
                     downTimeMilInt=$(printf "%.0f" "$(echo "$downTimeMil * 1000" | bc)")
-                    echo "$IPADDR,$HTTP_CHECK,$XRAY_CHECK,$downTimeMilInt,$actualFileSize" >> "$OUTPUT_CSV"
+                    echo "$IPADDR,$HTTP_CHECK,$XRAY_CHECK,$downTimeMilInt,$actualFileSize" >>"$OUTPUT_CSV"
                     rm -f "$TEMP_DIR/temp_downloaded_file"
+                else
+                    echo "$IPADDR,$HTTP_CHECK,$XRAY_CHECK,-,-" >>"$OUTPUT_CSV"
                 fi
 
                 kill -9 $XRAY_PID
+            else
+                echo "$IPADDR,$HTTP_CHECK,-,-,-" >>"$OUTPUT_CSV"
+
             fi
-        done < "$file"
+        done <"$file"
     done
     echo "Done. Results saved in $OUTPUT_CSV."
 fi
