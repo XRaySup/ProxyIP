@@ -51,11 +51,11 @@
       "settings": {
         "vnext": [
           {
-            "address": "172.66.47.45",
+            "address": "bia-5ct.pages.dev",
             "port": 443,
             "users": [
               {
-                "id": "89b3cbba-e6ac-485a-9481-976a0415eab9",
+                "id": "45487756-4bab-4df7-9004-c36bb3e6bb99",
                 "alterId": 0,
                 "email": "t@t.tt",
                 "security": "auto",
@@ -70,7 +70,7 @@
         "security": "tls",
         "tlsSettings": {
           "allowInsecure": false,
-          "serverName": "bpB-WoRkEr-PaNEl-F1M.PAgEs.dEV",
+          "serverName": "bia-5ct.pages.dev",
           "alpn": [
             "h2",
             "http/1.1"
@@ -79,9 +79,9 @@
           "show": false
         },
         "wsSettings": {
-          "path": "/qbI4NdVV1twjzYEG/PROXYIP?ed=2560",
+          "path": "/mZNwGxY4w4M4bRPO/PROXYIP?ed=2560",
           "headers": {
-            "Host": "bpb-worker-panel-f1m.pages.dev"
+            "Host": "bia-5ct.pages.dev"
           }
         }
       },
